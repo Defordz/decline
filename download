@@ -1,0 +1,89 @@
+import { GoogleGenAI } from "@google/genai";
+
+const apiKey = process.env.GEMINI_API_KEY;
+
+if (!apiKey) {
+  console.warn("GEMINI_API_KEY is not set. AI features will not work.");
+}
+
+export const ai = new GoogleGenAI({ apiKey: apiKey || "" });
+
+export async function transcribeAudio(base64Data: string, mimeType: string) {
+  const model = "gemini-3-flash-preview";
+  
+  const systemInstruction = `Tu es un transcripteur expert spécialisé dans le dialogue bilingue Français et Darija Marocaine. 
+Ta tâche est de fournir une transcription intégrale et fidèle, sans aucune omission, de l'audio fourni. 
+L'utilisateur a insisté : "je veux un transcription intégrale sans ommission".
+Respecte les passages en français et transcris précisément les passages en darija (en caractères latins ou arabes selon la clarté, mais privilégie une lecture fluide).
+Inclus toutes les hésitations, répétitions, et interjections (e.g., "euh", "ah", "bon").
+Si plusieurs personnes parlent, tente de les identifier par "Locuteur 1", "Locuteur 2", etc.
+Le résultat doit être uniquement le texte de la transcription.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: [
+        {
+          parts: [
+            {
+              inlineData: {
+                data: base64Data,
+                mimeType: mimeType,
+              },
+            },
+            {
+              text: "Génère la transcription intégrale de cet audio sans omettre le moindre mot.",
+            },
+          ],
+        },
+      ],
+      config: {
+        systemInstruction,
+        temperature: 0.1, // Low temperature for higher fidelity
+      },
+    });
+
+    return response.text || "Erreur : aucune transcription générée.";
+  } catch (error) {
+    console.error("Transcription error:", error);
+    throw error;
+  }
+}
+
+export async function generateReport(transcript: string) {
+  const model = "gemini-3-flash-preview";
+  
+  const systemInstruction = `Tu es un rédacteur professionnel expert. 
+Ta tâche est de transformer une transcription brute (contenant du Français et de la Darija) en un rapport de réunion structuré, clair et bien rédigé.
+Le rapport doit comprendre :
+1. Un titre pertinent.
+2. Un résumé exécutif.
+3. Les points clés abordés.
+4. Les décisions prises ou actions à entreprendre.
+5. Une synthèse des échanges bilingues en un français impeccable, tout en conservant le contexte culturel si nécessaire.
+Le ton doit être professionnel et formel.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: [
+        {
+          parts: [
+            {
+              text: `Voici la transcription :\n\n${transcript}\n\nRédige un rapport complet et structuré à partir de ces éléments.`,
+            },
+          ],
+        },
+      ],
+      config: {
+        systemInstruction,
+        temperature: 0.3,
+      },
+    });
+
+    return response.text || "Erreur : impossible de générer le rapport.";
+  } catch (error) {
+    console.error("Report generation error:", error);
+    throw error;
+  }
+}
